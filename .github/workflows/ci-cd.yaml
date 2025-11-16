@@ -51,7 +51,7 @@ jobs:
       uses: azure/setup-kubectl@v3
 
     # ------------------
-    # CREATE GHCR PULL SECRET IN MINIKUBE
+    # CREATE GHCR PULL SECRET
     # ------------------
     - name: Create GHCR pull secret in Minikube
       run: |
@@ -60,21 +60,21 @@ jobs:
           --docker-server=ghcr.io \
           --docker-username=faisalumerr \
           --docker-password=${{ secrets.GHCR_PAT }} \
-          --docker-email=faisal@example.com
+          --docker-email=dummy@example.com
 
     # ------------------
-    # PATCH DEPLOYMENT TO USE IMAGEPULLSECRET
+    # APPLY K8S MANIFESTS
     # ------------------
-    - name: Patch deployment with pull secret
+    - name: Deploy manifests
+      run: kubectl apply -f k8s/
+
+    # ------------------
+    # PATCH DEPLOYMENT (AFTER applying manifests)
+    # ------------------
+    - name: Patch deployment with imagePullSecret
       run: |
         kubectl patch deployment devsecops-app \
-          -p '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}' || true
-
-    # ------------------
-    # DEPLOY TO MINIKUBE
-    # ------------------
-    - name: Deploy to Minikube
-      run: kubectl apply -f k8s/
+          -p '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}'
 
     # ------------------
     # WAIT FOR ROLLOUT
