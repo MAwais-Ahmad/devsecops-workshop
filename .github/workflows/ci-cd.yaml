@@ -53,12 +53,15 @@ jobs:
     # SCAN IMAGE
     # ----------------------------------------------------
     - name: Scan image with Trivy
-      uses: aquasecurity/trivy-action@0.20.0
-      with:
-        image-ref: ghcr.io/${{ github.repository_owner }}/devsecops-app:latest
-        severity: CRITICAL,HIGH
-        ignore-unfixed: true
-        exit-code: "0"
+      run: |
+        $OWNER="${{ github.repository_owner }}".ToLower()
+        docker run --rm `
+          -v /var/run/docker.sock:/var/run/docker.sock `
+          aquasec/trivy:latest image `
+          --severity CRITICAL,HIGH `
+          --ignore-unfixed `
+          --exit-code 0 `
+          ghcr.io/$OWNER/devsecops-app:latest
 
     # ----------------------------------------------------
     # LOGIN + PUSH IMAGES
