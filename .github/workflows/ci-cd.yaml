@@ -22,7 +22,6 @@ jobs:
     - name: Use desktop-linux Docker context
       run: docker context use desktop-linux
 
-
     # ----------------------------------------------------
     # GENERATE SEMANTIC VERSION
     # ----------------------------------------------------
@@ -69,14 +68,35 @@ jobs:
           --exit-code 0 `
           ghcr.io/$OWNER/devsecops-app:latest
 
+
+
+       - name: Debug token
+     run: |
+       if ("${{ secrets.GHCR_PAT }}" -eq "") {
+         echo "Token is empty!"
+       } else {
+         echo "Token exists (length: $("${{ secrets.GHCR_PAT }}".Length))"
+       }
+
+
+    # ----------------------------------------------------
+    # DEBUG TOKEN
+    # ----------------------------------------------------
+    - name: Debug token
+      shell: powershell
+      run: |
+        if ("${{ secrets.GHCR_PAT }}" -eq "") {
+          echo "Token is empty!"
+        } else {
+          echo "Token exists (length: $("${{ secrets.GHCR_PAT }}".Length))"
+        }
+
     # ----------------------------------------------------
     # LOGIN + PUSH IMAGES
     # ----------------------------------------------------
     - name: Login to GHCR
+      run: docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GHCR_PAT }}
       shell: powershell
-      run: |
-        $env:CR_PAT = "${{ secrets.GHCR_PAT }}"
-        $env:CR_PAT | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
     - name: Push Images
       run: |
