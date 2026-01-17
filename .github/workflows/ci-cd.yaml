@@ -34,13 +34,14 @@ jobs:
 
     - name: Scan Image with Trivy
       run: |
+        $REPO_OWNER="${{ github.repository_owner }}".ToLower()
         docker run --rm `
           -v /var/run/docker.sock:/var/run/docker.sock `
           aquasec/trivy:latest image `
           --severity CRITICAL,HIGH `
           --ignore-unfixed `
           --exit-code 0 `
-          ghcr.io/mawais-ahmad/devsecops-app:latest
+          ghcr.io/$REPO_OWNER/devsecops-app:latest
 
     - name: Login to GHCR
       run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
