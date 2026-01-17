@@ -1,0 +1,231 @@
+=====================================================
+STEP-BY-STEP: CREATE GITHUB PERSONAL ACCESS TOKEN
+=====================================================
+
+This guide will walk you through creating a GitHub Personal Access Token (PAT)
+and adding it as a secret to your repository.
+
+TOTAL TIME: ~3 minutes
+DIFFICULTY: Easy (just follow the clicks!)
+
+=====================================================
+PART A: CREATE THE PERSONAL ACCESS TOKEN
+=====================================================
+
+STEP 1: Log into GitHub
+------------------------
+Open your browser and go to: https://github.com
+Make sure you're logged in.
+
+
+STEP 2: Go to Settings
+-----------------------
+1. Click on your profile picture (top-right corner)
+2. Click "Settings" from the dropdown menu
+
+
+STEP 3: Navigate to Developer Settings
+---------------------------------------
+1. Scroll all the way down in the left sidebar
+2. Click "Developer settings" (it's at the very bottom)
+
+
+STEP 4: Go to Personal Access Tokens
+-------------------------------------
+1. In the left sidebar, click "Personal access tokens"
+2. Click "Tokens (classic)" (NOT "Fine-grained tokens")
+
+
+STEP 5: Generate New Token
+---------------------------
+1. Click the green button "Generate new token"
+2. Select "Generate new token (classic)"
+3. GitHub might ask you to confirm your password - enter it
+
+
+STEP 6: Configure Your Token
+-----------------------------
+You'll see a form. Fill it out like this:
+
+A. Note (give it a name):
+   Type: "DevSecOps Workshop"
+   
+B. Expiration:
+   Select: "90 days" (or "No expiration" if you want, but less secure)
+
+C. Select scopes (IMPORTANT - check these boxes):
+   
+   ☑ repo (check the main "repo" box - this will auto-check all sub-boxes)
+     ☑ repo:status
+     ☑ repo_deployment
+     ☑ public_repo
+     ☑ repo:invite
+     ☑ security_events
+   
+   Scroll down more...
+   
+   ☑ write:packages (check this - it will auto-check read:packages too)
+     ☑ read:packages
+   
+   ☑ delete:packages (check this one too)
+   
+   ☑ workflow (check this for GitHub Actions)
+
+D. Click the green "Generate token" button at the bottom
+
+
+STEP 7: COPY YOUR TOKEN (CRITICAL!)
+------------------------------------
+You'll see a green success message and a token that looks like:
+ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+⚠️ IMPORTANT: Copy this token NOW!
+   You will NEVER see this token again once you leave this page!
+
+1. Click the copy icon next to the token
+   OR
+2. Select the entire token and press Ctrl+C
+
+3. SAVE IT SOMEWHERE SAFE (temporarily):
+   - Paste it in Notepad
+   - Or keep this browser tab open
+   
+   You'll need this in Part B!
+
+
+=====================================================
+PART B: ADD TOKEN AS GITHUB SECRET
+=====================================================
+
+STEP 8: Go to Your Repository
+------------------------------
+1. Navigate to your repository: 
+   https://github.com/<YOUR_USERNAME>/devsecops-workshop
+
+2. Make sure you're in YOUR repository (check the URL)
+
+
+STEP 9: Open Repository Settings
+---------------------------------
+1. Click on "Settings" tab (top menu of your repo)
+   
+   ⚠️ NOTE: This is REPOSITORY settings, not your profile settings!
+   
+2. If you don't see "Settings" tab, you might not have admin access to the repo
+
+
+STEP 10: Navigate to Secrets
+-----------------------------
+1. In the left sidebar, look for "Secrets and variables"
+2. Click on it to expand
+3. Click "Actions" underneath it
+
+
+STEP 11: Create New Secret
+---------------------------
+1. Click the green button "New repository secret"
+
+
+STEP 12: Enter Secret Details
+------------------------------
+You'll see a form with two fields:
+
+A. Name (field):
+   Type exactly: GHCR_PAT
+   
+   ⚠️ MUST be exactly "GHCR_PAT" (all caps, no spaces!)
+
+B. Secret (large text box):
+   Paste your token from Step 7
+   (the one that looks like ghp_xxxxxxxxxxxx...)
+
+C. Click "Add secret" button
+
+
+STEP 13: Verify It Worked
+--------------------------
+You should now see "GHCR_PAT" in your list of secrets.
+You won't be able to see the value (that's the point - it's secret!)
+
+✅ DONE! You've successfully created and added your GitHub PAT!
+
+
+=====================================================
+QUICK REFERENCE SUMMARY
+=====================================================
+
+What you just did:
+1. Created a Personal Access Token (PAT) on GitHub
+   - This is like a password that gives your CI/CD pipeline 
+     permission to push Docker images
+
+2. Added it as a secret named "GHCR_PAT" in your repository
+   - This lets your GitHub Actions workflow use it securely
+   - The workflow references it as: ${{ secrets.GHCR_PAT }}
+
+
+=====================================================
+TROUBLESHOOTING
+=====================================================
+
+Problem: "I closed the page and didn't copy my token!"
+Solution: No worries! Just delete the old token and create a new one:
+   - Go back to: Settings → Developer settings → Personal access tokens
+   - Find your token, click "Delete"
+   - Repeat Part A to create a new one
+
+Problem: "I don't see the Settings tab in my repository"
+Solution: Make sure:
+   - You're logged into the correct GitHub account
+   - You own this repository (or have admin access)
+   - You're on the repository page, not your profile
+
+Problem: "The secret doesn't appear in the list"
+Solution: Refresh the page. If still not there:
+   - Make sure you clicked "Add secret" button
+   - Try creating it again
+
+Problem: "Can I use the GitHub CLI (gh) instead?"
+Solution: Yes! If you have GitHub CLI installed:
+   
+   # Login to GitHub CLI
+   gh auth login
+   
+   # Create the token (this opens browser to authorize)
+   gh auth refresh -h github.com -s write:packages,delete:packages,repo,workflow
+   
+   # Add it as a secret (replace YOUR_TOKEN with the token you got)
+   gh secret set GHCR_PAT --body "YOUR_TOKEN"
+   
+   But honestly, the web UI method above is easier for first-timers!
+
+
+=====================================================
+SECURITY BEST PRACTICES
+=====================================================
+
+✅ DO:
+- Treat your PAT like a password (keep it secret!)
+- Use expiration dates (rotate tokens regularly)
+- Only give minimum required permissions
+- Delete tokens you're not using anymore
+
+❌ DON'T:
+- Never commit your PAT to your code
+- Don't share your PAT with others
+- Don't post it in Discord/Slack/forums
+- Don't use the same PAT for multiple projects (create separate ones)
+
+
+=====================================================
+YOU'RE ALL SET!
+=====================================================
+
+Your GitHub Personal Access Token is now:
+✅ Created
+✅ Stored as a repository secret
+✅ Ready to be used by your CI/CD pipeline
+
+You can now continue with Step 6 in the main steps.txt file!
+
+=====================================================

@@ -1,0 +1,331 @@
+===========================================
+DevSecOps Workshop - Windows Setup Guide
+===========================================
+
+PREREQUISITES:
+✓ Docker Desktop for Windows (already installed)
+✓ Windows 10/11 with WSL2 enabled
+
+===========================================
+STEP 1: ENABLE KUBERNETES IN DOCKER DESKTOP
+===========================================
+
+1. Open Docker Desktop
+2. Go to Settings (gear icon)
+3. Click on "Kubernetes" in the left sidebar
+4. Check "Enable Kubernetes"
+5. Click "Apply & Restart"
+6. Wait for Kubernetes to start (green indicator)
+
+Verify it works:
+   Open PowerShell and run:
+   kubectl get nodes
+
+   You should see one node listed.
+
+===========================================
+STEP 2: INSTALL REQUIRED TOOLS
+===========================================
+
+A. Install Git (if not already installed):
+   Download from: https://git-scm.com/download/win
+   Or use winget: winget install Git.Git
+
+B. Install kubectl (if not already available):
+   Docker Desktop usually installs it automatically.
+   Test by running in PowerShell: kubectl version
+
+===========================================
+STEP 3: SETUP GITHUB REPOSITORY
+===========================================
+
+1. Go to GitHub and create a new repository named:
+   devsecops-workshop
+
+2. Clone it to your machine:
+   cd C:\Users\user\Documents\random_projects\bundpharu_project
+   git clone https://github.com/<YOUR_USERNAME>/devsecops-workshop.git
+   cd devsecops-workshop
+
+===========================================
+STEP 4: CREATE THE APPLICATION FILES
+===========================================
+
+Create this folder structure:
+   app/
+      Dockerfile
+      index.js
+      package.json
+   k8s/
+      deployment.yaml
+      service.yaml
+   .github/
+      workflows/
+         cicd.yaml
+
+A. Create app/package.json:
+{
+  "name": "devsecops-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
+
+B. Create app/index.js:
+const express = require('express');
+const app = express();
+app.get('/', (req, res) => res.send('DevSecOps Workshop Working!'));
+app.listen(3000, () => console.log('Running on port 3000'));
+
+C. Create app/Dockerfile:
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --production
+COPY . .
+EXPOSE 3000
+CMD ["node", "index.js"]
+
+D. Create k8s/deployment.yaml:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devsecops-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devsecops-app
+  template:
+    metadata:
+      labels:
+        app: devsecops-app
+    spec:
+      containers:
+      - name: web
+        image: ghcr.io/<YOUR_GITHUB_USERNAME>/devsecops-app:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+      imagePullSecrets:
+      - name: ghcr-secret
+
+E. Create k8s/service.yaml:
+apiVersion: v1
+kind: Service
+metadata:
+  name: devsecops-svc
+spec:
+  selector:
+    app: devsecops-app
+  ports:
+  - port: 3000
+    targetPort: 3000
+  type: NodePort
+
+===========================================
+STEP 5: SETUP GITHUB PERSONAL ACCESS TOKEN
+===========================================
+
+1. Go to GitHub → Settings → Developer Settings → Personal Access Tokens → Tokens (classic)
+2. Generate new token (classic)
+3. Give it a name: "DevSecOps Workshop"
+4. Select permissions:
+   ☑ repo (all)
+   ☑ write:packages
+   ☑ read:packages
+   ☑ delete:packages
+5. Generate token and COPY IT (you won't see it again!)
+
+6. Add it as a GitHub Secret:
+   - Go to your repository
+   - Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: GHCR_PAT
+   - Value: <paste your token>
+   - Click "Add secret"
+
+===========================================
+STEP 6: SETUP SELF-HOSTED RUNNER (WINDOWS)
+===========================================
+
+1. In your GitHub repo, go to:
+   Settings → Actions → Runners → New self-hosted runner
+
+2. Select "Windows" as the OS
+
+3. Follow the commands shown (example):
+   
+   Open PowerShell as Administrator:
+   
+   # Create a folder
+   mkdir actions-runner; cd actions-runner
+   
+   # Download the runner (link provided by GitHub)
+   Invoke-WebRequest -Uri <GITHUB_PROVIDED_LINK> -OutFile actions-runner-win-x64.zip
+   
+   # Extract
+   Add-Type -AssemblyName System.IO.Compression.FileSystem
+   [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/actions-runner-win-x64.zip", "$PWD")
+   
+   # Configure (use the token GitHub shows you)
+   ./config.cmd --url https://github.com/<YOUR_USERNAME>/<YOUR_REPO> --token <GITHUB_PROVIDED_TOKEN>
+   
+   # Start the runner
+   ./run.cmd
+
+4. Keep this PowerShell window open while the runner is active!
+
+===========================================
+STEP 7: CREATE CI/CD PIPELINE
+===========================================
+
+Create .github/workflows/cicd.yaml:
+
+name: DevSecOps CI/CD
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  pipeline:
+    runs-on: self-hosted
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Generate Semantic Version
+      id: version
+      uses: paulhatch/semantic-version@v5.4.0
+      with:
+        tag_prefix: "v"
+        format: "${major}.${minor}.${patch}"
+        major_pattern: "BREAKING CHANGE"
+        minor_pattern: "feat"
+
+    - name: Print version
+      run: echo "VERSION=${{ steps.version.outputs.version }}"
+
+    - name: Build Docker Image
+      run: |
+        $VERSION="${{ steps.version.outputs.version }}"
+        docker build --no-cache `
+          -t ghcr.io/${{ github.repository_owner }}/devsecops-app:$VERSION `
+          -t ghcr.io/${{ github.repository_owner }}/devsecops-app:latest `
+          -f app/Dockerfile app/
+
+    - name: Scan Image with Trivy
+      uses: aquasecurity/trivy-action@0.20.0
+      with:
+        image-ref: ghcr.io/${{ github.repository_owner }}/devsecops-app:latest
+        severity: CRITICAL,HIGH
+        ignore-unfixed: true
+        exit-code: "0"
+
+    - name: Login to GHCR
+      run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+    - name: Push Images
+      run: |
+        $VERSION="${{ steps.version.outputs.version }}"
+        docker push ghcr.io/${{ github.repository_owner }}/devsecops-app:$VERSION
+        docker push ghcr.io/${{ github.repository_owner }}/devsecops-app:latest
+
+    - name: Create GHCR Secret
+      run: |
+        kubectl delete secret ghcr-secret --ignore-not-found=true
+        kubectl create secret docker-registry ghcr-secret `
+          --docker-server=ghcr.io `
+          --docker-username=${{ github.actor }} `
+          --docker-password=${{ secrets.GHCR_PAT }} `
+          --docker-email=dummy@example.com
+
+    - name: Apply Manifests
+      run: kubectl apply -f k8s/
+
+    - name: Patch Deployment With Version
+      run: |
+        $VERSION="${{ steps.version.outputs.version }}"
+        kubectl set image deployment/devsecops-app web=ghcr.io/${{ github.repository_owner }}/devsecops-app:$VERSION
+
+    - name: Wait for Rollout
+      run: kubectl rollout status deployment/devsecops-app
+
+===========================================
+STEP 8: PUSH CODE TO GITHUB
+===========================================
+
+In PowerShell, from your project directory:
+
+git add .
+git commit -m "Initial commit"
+git push origin main
+
+This will trigger the GitHub Actions pipeline!
+
+===========================================
+STEP 9: WATCH THE PIPELINE RUN
+===========================================
+
+1. Go to your GitHub repository
+2. Click on "Actions" tab
+3. You should see your workflow running
+4. Click on it to see each step execute
+
+===========================================
+STEP 10: ACCESS YOUR APPLICATION
+===========================================
+
+Once the pipeline completes:
+
+1. Get the service URL:
+   kubectl get svc devsecops-svc
+
+2. Port forward to access it:
+   kubectl port-forward svc/devsecops-svc 3000:3000
+
+3. Open browser and go to:
+   http://localhost:3000
+
+You should see: "DevSecOps Workshop Working!"
+
+===========================================
+TROUBLESHOOTING
+===========================================
+
+Problem: kubectl not found
+Solution: Make sure Docker Desktop's Kubernetes is enabled
+
+Problem: Runner can't find docker
+Solution: Make sure Docker Desktop is running
+
+Problem: Pipeline fails on kubectl commands
+Solution: The runner needs kubectl. Install it:
+   choco install kubernetes-cli
+   OR download from: https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/
+
+Problem: Can't push to GitHub
+Solution: Check your GHCR_PAT secret is set correctly
+
+===========================================
+CLEANUP
+===========================================
+
+When done:
+kubectl delete deployment devsecops-app
+kubectl delete svc devsecops-svc
+
+===========================================
+
+SUMMARY:
+Yes, you need Kubernetes - but you DON'T need Minikube or a VM!
+Docker Desktop for Windows has Kubernetes built-in, just enable it.
+
+The main components:
+1. Docker Desktop (with Kubernetes enabled) ✓
+2. GitHub repository with your code
+3. Self-hosted GitHub Actions runner (runs on your Windows machine)
+4. CI/CD pipeline that builds, scans, and deploys automatically
