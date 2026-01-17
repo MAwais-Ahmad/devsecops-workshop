@@ -1,4 +1,4 @@
-name: DevSecOps CI/CD
+name: Build-Scan-Push-Deploy (Self-Hosted Runner + Semantic Versioning)
 
 on:
   push:
@@ -9,8 +9,17 @@ jobs:
     runs-on: self-hosted
 
     steps:
+    # ----------------------------------------------------
+    # CHECKOUT CODE
+    # ----------------------------------------------------
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 
 
+
+    # ----------------------------------------------------
+    # GENERATE SEMANTIC VERSION
+    # ----------------------------------------------------
     - name: Generate Semantic Version
       id: version
       uses: paulhatch/semantic-version@v5.4.0
@@ -21,56 +30,88 @@ jobs:
         minor_pattern: "feat"
 
     - name: Print version
-      run: echo "VERSION=${{ steps.version.outputs.version }}"
+      run: |
+        echo "New version: ${{ steps.version.outputs.version }}"
 
-    - name: Build Docker Image
+    # ----------------------------------------------------
+    # BUILD IMAGE
+    # ----------------------------------------------------
+    - name: Build Docker image
       run: |
         $VERSION="${{ steps.version.outputs.version }}"
-        $REPO_OWNER="${{ github.repository_owner }}".ToLower()
+        $OWNER="${{ github.repository_owner }}".ToLower()
+        
+        echo "Building Docker image ghcr.io/$OWNER/devsecops-app:$VERSION"
+        
         docker build --no-cache `
-          -t ghcr.io/$REPO_OWNER/devsecops-app:$VERSION `
-          -t ghcr.io/$REPO_OWNER/devsecops-app:latest `
-          -f app/Dockerfile app/
+          -t ghcr.io/$OWNER/devsecops-app:$VERSION `
+          -t ghcr.io/$OWNER/devsecops-app:latest `
+          -f app/Dockerfile `
+          app/
 
-    - name: Scan Image with Trivy
-      run: |
-        $REPO_OWNER="${{ github.repository_owner }}".ToLower()
-        docker run --rm `
-          -v /var/run/docker.sock:/var/run/docker.sock `
-          aquasec/trivy:latest image `
-          --severity CRITICAL,HIGH `
-          --ignore-unfixed `
-          --exit-code 0 `
-          ghcr.io/$REPO_OWNER/devsecops-app:latest
+    # ----------------------------------------------------
+    # SCAN IMAGE
+    # ----------------------------------------------------
+    - name: Scan image with Trivy
+      uses: aquasecurity/trivy-action@0.20.0
+      with:
+        image-ref: ghcr.io/${{ github.repository_owner }}/devsecops-app:latest
+        severity: CRITICAL,HIGH
+        ignore-unfixed: true
+        exit-code: "0"
 
+    # ----------------------------------------------------
+    # LOGIN + PUSH IMAGES
+    # ----------------------------------------------------
     - name: Login to GHCR
+      shell: pwsh
       run: |
-        "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        $token = "${{ secrets.GHCR_PAT }}"
+        $username = "${{ github.actor }}"
+        $token | docker login ghcr.io -u $username --password-stdin
 
     - name: Push Images
       run: |
         $VERSION="${{ steps.version.outputs.version }}"
-        $REPO_OWNER="${{ github.repository_owner }}".ToLower()
-        docker push ghcr.io/$REPO_OWNER/devsecops-app:$VERSION
-        docker push ghcr.io/$REPO_OWNER/devsecops-app:latest
+        $OWNER="${{ github.repository_owner }}".ToLower()
+        docker push ghcr.io/$OWNER/devsecops-app:$VERSION
+        docker push ghcr.io/$OWNER/devsecops-app:latest
 
-    - name: Create GHCR Secret
+    # ----------------------------------------------------
+    # CREATE GHCR SECRET (FOR MINIKUBE)
+    # ----------------------------------------------------
+    - name: Create GHCR pull secret in Minikube
       run: |
         kubectl delete secret ghcr-secret --ignore-not-found=true
+        
         kubectl create secret docker-registry ghcr-secret `
           --docker-server=ghcr.io `
           --docker-username=${{ github.actor }} `
           --docker-password=${{ secrets.GHCR_PAT }} `
           --docker-email=dummy@example.com
 
-    - name: Apply Manifests
+    # ----------------------------------------------------
+    # APPLY MANIFESTS
+    # ----------------------------------------------------
+    - name: Deploy manifests
       run: kubectl apply -f k8s/
 
-    - name: Patch Deployment With Version
+    # ----------------------------------------------------
+    # PATCH DEPLOYMENT (SET VERSION + IMAGEPULLSECRET)
+    # ----------------------------------------------------
+    - name: Patch deployment with version + pull secret
       run: |
         $VERSION="${{ steps.version.outputs.version }}"
-        $REPO_OWNER="${{ github.repository_owner }}".ToLower()
-        kubectl set image deployment/devsecops-app web=ghcr.io/$REPO_OWNER/devsecops-app:$VERSION
+        $OWNER="${{ github.repository_owner }}".ToLower()
+        
+        echo "Patching deployment to use image version: $VERSION"
+        
+        kubectl set image deployment/devsecops-app web=ghcr.io/$OWNER/devsecops-app:$VERSION
+        
+        kubectl patch deployment devsecops-app -p '{\"spec\":{\"template\":{\"spec\":{\"imagePullSecrets\":[{\"name\":\"ghcr-secret\"}]}}}}'
 
-    - name: Wait for Rollout
+    # ----------------------------------------------------
+    # WAIT FOR ROLLOUT
+    # ----------------------------------------------------
+    - name: Wait for rollout
       run: kubectl rollout status deployment/devsecops-app
