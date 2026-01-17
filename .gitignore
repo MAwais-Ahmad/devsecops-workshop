@@ -1,0 +1,16 @@
+# Ignore workshop notes and steps
+steps.txt
+text1.1.txt
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore node_modules if testing locally
+node_modules/
