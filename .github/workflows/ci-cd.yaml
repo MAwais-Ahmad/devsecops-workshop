@@ -67,11 +67,7 @@ jobs:
     # LOGIN + PUSH IMAGES
     # ----------------------------------------------------
     - name: Login to GHCR
-      shell: pwsh
-      run: |
-        $token = "${{ secrets.GHCR_PAT }}"
-        $username = "${{ github.actor }}"
-        $token | docker login ghcr.io -u $username --password-stdin
+      run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
     - name: Push Images
       run: |
