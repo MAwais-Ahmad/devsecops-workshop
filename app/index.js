@@ -3,9 +3,9 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.get('/', (req,res) => res.send(`Hello from UMT DevSecOps Workshop v2.0! Host: ${process.env.HOSTNAME || 'local'}`));
-app.get('/health', (req,res) => res.status(200).json({status:'ok'}));
-app.get('/error', (req,res) => { // useful to trigger alerts
+app.get('/', (req, res) => res.send(`Hello from UMT DevSecOps Workshop v3.0! Host: ${process.env.HOSTNAME || 'local'} | Deployed at: ${new Date().toLocaleString()}`));
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+app.get('/error', (req, res) => { // useful to trigger alerts
   res.status(500).send('forced error for demo');
 });
 
